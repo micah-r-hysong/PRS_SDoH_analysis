@@ -3,6 +3,6 @@ Whole-Genome Sequencing (WGS),
 sufficient EHR (at least 3 separate entries, at least 3 years long for medical home definition),
 income data (including household size to calculate percent of poverty threshold),
 educational attainment data,
-3 digit area-level zipcode, 
+3 digit area-level zipcode. The attached PNG illustrates this selection process. 
 
 The following were used to assess demographics:
