@@ -18,3 +18,12 @@ Get SDoH metrics for everyone
 3 digit zip code 
 Income
 Use code XXX
+
+### Step 4 
+Calculate PRS. PRS weights files for asthma, breast cancer, chronic kidney disease (CKD), coronary heart disease (CHD), prostate cancer, and type 2 diabetes (T2D) have been provided in the PRS folder. 
+
+### Step 5
+PRS mean and variance PC adjustment. Code is XXX in PRS folder. 
+
+
+
