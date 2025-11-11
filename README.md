@@ -7,10 +7,10 @@ When using the All of Us Research Program to explore the relationship between va
 Are PsRS generalizable across healthcare systems? We will test this question for 6/9 of our conditions: asthma, breast cancer, chronic kidney disease (CKD), coronary heart disease (CHD), prostate cancer, and type 2 diabetes (T2D).
 
 ### Step 1
-Implement disease algorithms. Make case control table (0 control, 1 case, NA neither)
+Implement disease algorithms. Make Case control table (0 control, 1 case, NA neither)
 
 ### Step 2
-Calculate record depth (number of visits) and visit frequency  (record depth / length of record in days (last encounter - first encounter)) for everyone
+Calculate record depth (number of visits) and visit frequency (record depth / length of record in days (last encounter - first encounter)) for everyone
 
 ### Step 3
 Get SDoH metrics for everyone 
@@ -19,11 +19,14 @@ Get SDoH metrics for everyone
 Income
 Use code XXX
 
-### Step 4 
+### Step 4
+Make whole sample and case/control demographics tables. See PRS_SDoH_analysis/demographics/Aou for examples. 
+
+### Step 5 
 Calculate PRS. PRS weights files for asthma, breast cancer, chronic kidney disease (CKD), coronary heart disease (CHD), prostate cancer, and type 2 diabetes (T2D) have been provided in the PRS folder. 
 
-### Step 5
-PRS mean and variance PC adjustment. Code is XXX in PRS folder. 
+### Step 6
+PRS mean and variance PC adjustment. Code is "00_emerge_zscore_adj_PRS.ipynb" in PRS folder. Save graphs of pre- and post-normalized PRS.
 
 
 
