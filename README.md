@@ -28,5 +28,5 @@ Calculate PRS. PRS weights files for asthma, breast cancer, chronic kidney disea
 ### Step 6
 PRS mean and variance PC adjustment. Code is "00_emerge_zscore_adj_PRS.ipynb" in PRS folder. Save graphs of pre- and post-normalized PRS.
 
-
-
+### Step 7
+Calculate PsRS weights and calculate PsRS in your cohort using the AoU weights. Code is "elastic_net_models_generate_PsRS.ipynb" in the PsRS folder. Output to share is PsRS weights files.
