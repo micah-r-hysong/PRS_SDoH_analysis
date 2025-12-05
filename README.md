@@ -14,19 +14,22 @@ Calculate record depth (number of visits) and visit frequency (record depth / le
 
 ### Step 3
 Get SDoH metrics for everyone 
-5-level semi-continous education variable [Less than high school = 5, High school graduate = 4, 1 to 3 years after high school = 3, 4 or more years college = 2, Advance degree = 1]
-3 digit zip code 
-Income
-Use code XXX
+##### 5-level semi-continous education variable [Less than high school = 5, High school graduate = 4, 1 to 3 years after high school = 3, 4 or more years college = 2, Advance degree = 1]
+##### 3 digit zip code - use ACS_data_2013_2023.csv to get area-level metrics
+##### Income
+##### Use code XXX
 
 ### Step 4
 Make whole sample and case/control demographics tables. See PRS_SDoH_analysis/demographics/Aou for examples. 
 
 ### Step 5 
-Calculate PRS. PRS weights files for asthma, breast cancer, chronic kidney disease (CKD), coronary heart disease (CHD), prostate cancer, and type 2 diabetes (T2D) have been provided in the PRS folder. 
+Calculate PRS. PRS weights files (hg38) for asthma, breast cancer, chronic kidney disease (CKD), coronary heart disease (CHD), prostate cancer, and type 2 diabetes (T2D) have been provided in the PRS folder. 
 
 ### Step 6
 PRS mean and variance PC adjustment. Code is "00_emerge_zscore_adj_PRS.ipynb" in PRS folder. Save graphs of pre- and post-normalized PRS.
 
 ### Step 7
 Calculate PsRS weights and calculate PsRS in your cohort using the AoU weights. Code is "elastic_net_models_generate_PsRS.ipynb" in the PsRS folder. Output to share is PsRS weights files.
+
+### Step 8
+
