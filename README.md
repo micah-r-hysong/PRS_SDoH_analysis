@@ -26,7 +26,7 @@ Make whole sample and case/control demographics tables. See PRS_SDoH_analysis/de
 Calculate PRS. PRS weights files (hg38) for asthma, breast cancer, chronic kidney disease (CKD), coronary heart disease (CHD), prostate cancer, and type 2 diabetes (T2D) have been provided in the PRS folder. 
 
 ### Step 6
-PRS mean and variance PC adjustment. Code is "00_emerge_zscore_adj_PRS.ipynb" in PRS folder. Save graphs of pre- and post-normalized PRS.
+PRS mean and variance PC adjustment. Code is "00_emerge_zscore_adj_PRS.ipynb" in PRS folder. Save graphs of pre- and post-normalized PRS. Alternatively can use pgs_calc.
 
 ### Step 7
 Calculate PsRS weights and calculate PsRS in your cohort using the AoU weights. Code is "elastic_net_models_generate_PsRS.ipynb" in the PsRS folder. Output to share is PsRS weights files.
