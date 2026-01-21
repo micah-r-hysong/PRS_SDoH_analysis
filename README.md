@@ -7,7 +7,8 @@ When using the All of Us Research Program to explore the relationship between va
 Are PsRS generalizable across healthcare systems? We will test this question for 6/8 of our conditions: asthma, breast cancer, chronic kidney disease (CKD), coronary heart disease (CHD), prostate cancer, and type 2 diabetes (T2D).
 
 ### Step 1
-Implement disease algorithms. Make Case control table (0 control, 1 case, NA neither)
+Implement disease algorithms. Make Case control table (0 control, 1 case, NA neither). Disease names (columns) here are Afib, CKD, CHD, t2d, t1d, ProstateC. 
+)
 
 ### Step 2
 Calculate record depth (number of visits) and visit frequency (record depth / length of record in days (last encounter - first encounter)) for everyone
