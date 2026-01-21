@@ -32,4 +32,4 @@ PRS mean and variance PC adjustment. Code is "00_emerge_zscore_adj_PRS.ipynb" in
 Calculate PsRS weights and calculate PsRS in your cohort using the AoU weights. Code is "elastic_net_models_generate_PsRS.ipynb" in the PsRS folder. Output to share is PsRS weights files.
 
 ### Step 8
-
+Joint model indidual-level PsRS and PRS. Export csv with AUC and DeLong's statisitcs. Export plots. Code is "joint_modeling_AUC." Will need to be ran twice - once with AoU trained PsRS weights and again with internally trained PsRS weights. Code includes sensitivity analysis additionally adjusting for genetic PCs. 
