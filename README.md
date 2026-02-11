@@ -29,7 +29,7 @@ Calculate PRS. PRS weights files (hg38) for asthma, breast cancer, chronic kidne
 PRS mean and variance PC adjustment. Code is "00_emerge_zscore_adj_PRS.ipynb" in PRS folder. Save graphs of pre- and post-normalized PRS. Alternatively can use pgs_calc.
 
 ### Step 7
-Calculate PsRS weights and calculate PsRS in your cohort using the AoU weights. Code is "elastic_net_models_generate_PsRS.ipynb" in the PsRS folder. Output to share is PsRS weights files.
+Calculate PsRS weights and calculate PsRS in your cohort using the AoU no income weights. Code is "elastic_net_models_generate_PsRS.ipynb" in the PsRS folder. Output to share is PsRS weights files.
 
 ### Step 8
 Joint model indidual-level PsRS and PRS. Export csv with AUC and DeLong's statisitcs. Export plots. Code is "joint_modeling_AUC." Will need to be ran twice - once with AoU trained PsRS weights and again with internally trained PsRS weights. Code includes sensitivity analysis additionally adjusting for genetic PCs. 
