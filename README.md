@@ -14,10 +14,11 @@ Calculate record depth (number of visits) and visit frequency (record depth / le
 
 ### Step 3
 Get SDoH metrics for everyone 
-##### 5-level semi-continous education variable [Less than high school = 5, High school graduate = 4, 1 to 3 years after high school = 3, 4 or more years college = 2, Advance degree = 1]
-##### 3 digit zip code - use ACS_data_2013_2023.csv to get area-level metrics. For year, use year closest to year with individual-level income and education data. If there are multiple years for each, use earliest post-2013. 
-##### Income
-##### Use code XXX
+#### 5-level semi-continous education variable [Less than high school = 5, High school graduate = 4, 1 to 3 years after high school = 3, 4 or more years college = 2, Advance degree = 1]
+#### 3 digit zip code - use ACS_data_2013_2023.csv to get area-level metrics. For year, use year closest to year with individual-level income and education data. If there are multiple years for each, use earliest post-2013. 
+#### (Income) Percent of poverty threshold - Income and number of people living in the house will be used to calculate the percentage of the poverty threshold for individuals' households. 
+##### Questions in AoU: "What is your annual household income from all sources?" and "Not including yourself, how many other people live at home with you?" Because of the way the number_living question is phrased, we added 1 to the original value (not shown in this code) Please check your survey wording and adjust accordingly to reflect total number living in the house as expected by the povert guidelines. 
+#### Use code get_SES_data in the poverty_guidelines folder
 
 ### Step 4
 Make whole sample and case/control demographics tables. See PRS_SDoH_analysis/demographics/Aou for examples. 
