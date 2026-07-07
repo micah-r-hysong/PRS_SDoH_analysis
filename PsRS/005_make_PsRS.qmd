@@ -1,0 +1,485 @@
+---
+title: "005_make_PsRS"
+format: pdf
+editor: visual
+---
+
+## Set up
+
+Load packages
+
+```{r}
+library(tidyverse)  
+library(glmnet)
+library(dplyr)
+library(pROC)
+library(broom)
+library(caret)
+```
+
+Load data and set lists
+
+```{r}
+all_data0 <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Data/all_SDoH_PRS_data.csv")
+all_data0$age2 <- all_data0$age^2
+
+domains <- c("individual_poverty", "education",  "fraction_assisted_income", "fraction_high_school_edu", "median_income", "fraction_no_health_insurance", "fraction_poverty", "fraction_vacant_housing",  "deprivation_index")
+
+diseases<-c("Asthma", "Breast_Cancer", "CKD", "CAD", "Prostate_Cancer", "Type_2_Diabetes")
+
+```
+
+## Elastic Net function
+
+```{r}
+set.seed(123)
+run_elastic_net <- function(diseases, selection_terms, merged_data) {
+
+  ####---------------------------------------------------------------
+  #### 1. Containers
+  ####---------------------------------------------------------------
+
+  summary_cols <- c(
+    "mean_train_score", "sd_train_score",
+    "mean_test_score",  "sd_test_score",
+    "mean_AUC",         "sd_AUC",
+    "n_predictors",     "Predictors"
+  )
+
+  model_summary <- matrix(NA, nrow = length(diseases), ncol = length(summary_cols))
+  colnames(model_summary) <- summary_cols
+  rownames(model_summary) <- diseases
+  model_summary <- as.data.frame(model_summary)
+
+  individual_scores <- list()
+  weights_list      <- list()
+
+  set.seed(123)
+
+  ####---------------------------------------------------------------
+  #### 2. Loop over diseases
+  ####---------------------------------------------------------------
+
+  for (disease in diseases) {
+
+    df <- merged_data %>%
+      select(epr_number, all_of(disease), all_of(selection_terms)) %>%
+      drop_na()
+
+    X <- as.matrix(df %>% select(all_of(selection_terms)))
+    y <- as.numeric(df[[disease]])
+
+    penalty_factors <- rep(1, ncol(X))
+
+    ####-----------------------------------------------------------
+    #### 3. Cross-validation (performance estimation ONLY)
+    ####-----------------------------------------------------------
+
+    n_splits     <- 5
+    train_scores <- c()
+    test_scores  <- c()
+    aucs         <- c()
+
+    for (i in seq_len(n_splits)) {
+
+      idx_train <- createDataPartition(y, p = 0.7, list = FALSE)
+
+      X_train <- X[idx_train, , drop = FALSE]
+      X_test  <- X[-idx_train, , drop = FALSE]
+      y_train <- y[idx_train]
+      y_test  <- y[-idx_train]
+
+      # ---- train-only scaling ----
+      scale_min <- apply(X_train, 2, min)
+      scale_max <- apply(X_train, 2, max)
+      scale_rng <- scale_max - scale_min
+      scale_rng[scale_rng == 0] <- 1
+
+      X_train <- sweep(sweep(X_train, 2, scale_min, "-"), 2, scale_rng, "/")
+      X_test  <- sweep(sweep(X_test,  2, scale_min, "-"), 2, scale_rng, "/")
+
+      cv_fit <- cv.glmnet(
+        X_train, y_train,
+        alpha = 0.5,
+        family = "binomial",
+        penalty.factor = penalty_factors
+      )
+
+      lambda_best <- cv_fit$lambda.min
+
+      fit <- glmnet(
+        X_train, y_train,
+        alpha = 0.5,
+        lambda = lambda_best,
+        family = "binomial",
+        penalty.factor = penalty_factors
+      )
+
+      # performance
+      preds_test <- predict(fit, X_test, type = "link")
+      test_scores  <- c(test_scores, cor(preds_test, y_test))
+      train_scores <- c(train_scores, cv_fit$cvm[cv_fit$lambda == lambda_best])
+
+      aucs <- c(
+        aucs,
+        as.numeric(assess.glmnet(cv_fit, newx = X_train, newy = y_train)$auc)
+      )
+    }
+
+    ####-----------------------------------------------------------
+    #### 4. Full-data refit (FINAL MODEL FOR WEIGHTS)
+    ####-----------------------------------------------------------
+
+    scale_min_full <- apply(X, 2, min)
+    scale_max_full <- apply(X, 2, max)
+    scale_rng_full <- scale_max_full - scale_min_full
+    scale_rng_full[scale_rng_full == 0] <- 1
+
+    X_scaled <- sweep(sweep(X, 2, scale_min_full, "-"), 2, scale_rng_full, "/")
+
+    cv_full <- cv.glmnet(
+      X_scaled, y,
+      alpha = 0.5,
+      family = "binomial",
+      penalty.factor = penalty_factors
+    )
+
+    lambda_final <- cv_full$lambda.min
+
+    final_fit <- glmnet(
+      X_scaled, y,
+      alpha = 0.5,
+      lambda = lambda_final,
+      family = "binomial",
+      penalty.factor = penalty_factors
+    )
+
+    coef_final <- as.vector(coef(final_fit))
+    names(coef_final) <- rownames(coef(final_fit))
+
+    ####-----------------------------------------------------------
+    #### 5. Store weights + scaling metadata
+    ####-----------------------------------------------------------
+
+    weights_list[[disease]] <- tibble(
+      Disease     = disease,
+      Predictor   = names(coef_final),
+      weight      = coef_final,
+      scale_min   = c(0, scale_min_full),
+      scale_max   = c(1, scale_max_full),
+      scale_range = c(1, scale_rng_full)
+    )
+
+    ####-----------------------------------------------------------
+    #### 6. Compute individual PsRS (reference scores)
+    ####-----------------------------------------------------------
+
+    Xb <- X_scaled %*% coef_final[-1] + coef_final[1]
+
+    individual_scores[[disease]] <- tibble(
+      epr_number = df$epr_number,
+      prediction = as.numeric(Xb)
+    )
+
+    ####-----------------------------------------------------------
+    #### 7. Populate summary table
+    ####-----------------------------------------------------------
+
+    nz <- coef_final[-1] != 0
+
+    model_summary[disease, ] <- list(
+      mean(train_scores),
+      sd(train_scores),
+      mean(test_scores),
+      sd(test_scores),
+      mean(aucs),
+      sd(aucs),
+      sum(nz),
+      paste(names(coef_final[-1])[nz], collapse = ", ")
+    )
+
+    message("Completed Elastic Net for: ", disease)
+  }
+  
+  ####---------------------------------------------------------------
+  #### 8. Final weights tables
+  ####---------------------------------------------------------------
+
+  scales <- bind_rows(weights_list) |> select(-c(weight))
+  weights_long <- bind_rows(weights_list)
+
+  weights_wide <- weights_long %>%
+    select(Disease, Predictor, weight) %>%
+    pivot_wider(names_from = Disease, values_from = weight)
+
+  ####---------------------------------------------------------------
+  #### 9. Return
+  ####---------------------------------------------------------------
+
+  list(
+    model_summary     = model_summary,
+    individual_scores = individual_scores,
+    scales            = scales,
+    weights_wide      = weights_wide
+  )
+}
+```
+
+## **Run ENs**
+
+```{r}
+results_all <- run_elastic_net(diseases, domains, all_data0)
+selection_terms_no_income<- setdiff(domains, "individual_poverty")      
+results_no_income <- run_elastic_net(diseases, selection_terms_no_income, all_data0)
+
+```
+
+## **Save Files**
+
+```{r}
+# Reporting
+write_excel_csv(results_all[[1]], '/proj/raffieldlab/users/mhysong/PEGS/Results/elastic_net_results.csv')
+
+write_excel_csv(results_no_income[[1]], '/proj/raffieldlab/users/mhysong/PEGS/Results/elastic_net_results_no_income.csv')
+
+# Weights files
+write_excel_csv(results_all[[4]], '/proj/raffieldlab/users/mhysong/PEGS/Results/PsRS_weights_file_PEGS.csv')
+
+write_excel_csv(results_no_income[[4]], '/proj/raffieldlab/users/mhysong/PEGS/Results/PsRS_weights_file_no_income_PEGS.csv')
+
+#Scaling files
+write_excel_csv(results_all[[3]], '/proj/raffieldlab/users/mhysong/PEGS/Results/PsRS_scaling_file_PEGS.csv')
+
+write_excel_csv(results_no_income[[3]], '/proj/raffieldlab/users/mhysong/PEGS/Results/PsRS_scaling_file_no_income_PEGS.csv')
+
+```
+
+## **Calculate PsRS**
+
+### Load and prepare data
+
+```{r}
+PsRS_scaling_AoU <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Data/PsRS_scaling_file.csv")
+PsRS_scaling_no_income_AoU <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Data/PsRS_scaling_file_no_income.csv")
+PsRS_weights_AoU <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Data/PsRS_weights_file.csv")
+PsRS_weights_no_income_AoU <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Data/PsRS_weights_file_no_income.csv")
+
+PsRS_scaling_PEGS <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Results/PsRS_scaling_file_PEGS.csv")
+PsRS_scaling_PEGS <- PsRS_scaling_PEGS %>%
+  mutate(
+    Disease = recode(
+      Disease,
+      CAD = "CHD",
+      Type_2_Diabetes = "t2d",
+      Breast_Cancer = "BreastC",
+      Prostate_Cancer = "ProstateC"
+    ),
+    Predictor = recode(
+      Predictor,
+      individual_poverty = "per_poverty_threshold"
+    )
+  )
+PsRS_scaling_no_income_PEGS <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Results/PsRS_scaling_file_no_income_PEGS.csv")
+PsRS_scaling_no_income_PEGS <- PsRS_scaling_no_income_PEGS %>%
+  mutate(
+    Disease = recode(
+      Disease,
+      CAD = "CHD",
+      Type_2_Diabetes = "t2d",
+      Breast_Cancer = "BreastC",
+      Prostate_Cancer = "ProstateC"))
+PsRS_weights_PEGS <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Results/PsRS_weights_file_PEGS.csv")
+PsRS_weights_PEGS <- PsRS_weights_PEGS |> rename(CHD = CAD,
+                               t2d = Type_2_Diabetes,
+                               BreastC = Breast_Cancer,
+                               ProstateC = Prostate_Cancer) |>
+                    mutate(Predictor = recode(Predictor, 
+                        individual_poverty = "per_poverty_threshold"))
+
+PsRS_weights_no_income_PEGS <- read.csv("/proj/raffieldlab/users/mhysong/PEGS/Results/PsRS_weights_file_no_income_PEGS.csv")
+PsRS_weights_no_income_PEGS <- PsRS_weights_no_income_PEGS |> 
+                              rename(CHD = CAD,
+                               t2d = Type_2_Diabetes,
+                               BreastC = Breast_Cancer,
+                               ProstateC = Prostate_Cancer)
+
+diseases<-c("Asthma", "BreastC", "CKD", "CHD", "ProstateC", "t2d")
+domains<-c('per_poverty_threshold', 'education', 
+           'fraction_assisted_income', 'fraction_high_school_edu', 'median_income', 
+           'fraction_no_health_insurance', 'fraction_poverty', 'fraction_vacant_housing', 'deprivation_index')
+domains_no_income <- c('education', 
+           'fraction_assisted_income', 'fraction_high_school_edu', 'median_income', 
+           'fraction_no_health_insurance', 'fraction_poverty', 'fraction_vacant_housing', 'deprivation_index')
+
+# ------- 0.00 Match column names ------
+all_data <- all_data0 |> rename(CHD = CAD,
+                               t2d = Type_2_Diabetes,
+                               BreastC = Breast_Cancer,
+                               ProstateC = Prostate_Cancer,
+                               per_poverty_threshold = individual_poverty)
+# ---- 0. Add intercept ----
+all_data_with_intercept <- all_data %>%
+  mutate(`(Intercept)` = 1)
+
+```
+
+### Functions
+
+```{r}
+compute_PsRS <- function(domains, PsRS_weights, PsRS_scaling) {
+  # ---- 1. Pivot all_data to long for predictors only ----
+  long_data <- all_data_with_intercept %>%
+    pivot_longer(
+      cols = c(all_of(domains), `(Intercept)`),
+      names_to = "Predictor",
+      values_to = "value")
+
+  # ---- 2. Pivot weights to long ----
+  weights_long <- PsRS_weights %>%
+    pivot_longer(
+      cols = all_of(diseases),
+      names_to = "Disease",
+      values_to = "coef")
+  
+  # ---- 3. Expand for each disease ----
+  # Create all combinations of person_id, Predictor, and disease
+  long_data_expanded <- expand_grid(
+    epr_number= unique(all_data$epr_number),
+    Predictor = unique(long_data$Predictor),
+    Disease = diseases
+  ) %>%
+    left_join(long_data, by = c("epr_number", "Predictor"))
+  
+  # ---- 4. Join weights and scaling ----
+  long_data_scaled <- long_data_expanded %>%
+    left_join(weights_long, by = c("Predictor", "Disease")) %>%
+    left_join(PsRS_scaling, by = c("Predictor", "Disease")) %>%
+    mutate(
+      value_scaled = if_else(
+        Predictor == "(Intercept)",
+       value,
+        (value - scale_min) / (scale_max - scale_min)
+      ),
+      score_part = value_scaled * coef
+    )
+
+  # ---- 5. Aggregate to compute PsRS ----
+  score_wide <- long_data_scaled %>%
+    group_by(epr_number, Disease) %>%
+    summarize(score = sum(score_part, na.rm = TRUE), .groups = "drop") %>%
+    pivot_wider(
+      names_from = Disease,
+      values_from = score,
+      values_fill = 0
+    ) %>%
+    rename_with(~ paste0(., "_PsRS"), -epr_number)
+  
+  return(score_wide)
+}
+
+
+plot_PsRS <- function(score_wide) {
+  
+  # Pivot to long format
+  scores_long <- score_wide %>%
+    pivot_longer(
+      cols = ends_with("_PsRS"),
+      names_to = "disease",
+      values_to = "score"
+    )
+
+  # Plot facet-wrapped histograms
+  plot<-ggplot(scores_long, aes(x = score)) +
+    geom_histogram(bins = 40, fill = "skyblue", color = "white") +
+    facet_wrap(~ disease, scales = "free") +
+    theme_minimal() +
+    labs(
+      title = "Distribution of PsRS",
+      x = "Score",
+      y = "Count"
+    ) +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),
+      strip.text = element_text(size = 12)
+    )
+  return(plot)
+}
+
+```
+
+#### AoU PsRS
+
+```{r}
+results_AoU <- compute_PsRS(domains, PsRS_weights_AoU, PsRS_scaling_AoU)
+write_excel_csv(results_AoU, '/proj/raffieldlab/users/mhysong/PEGS/Results/individual_PsRS_AoU.csv')
+plot_PsRS(results_AoU)
+```
+
+#### AoU no income PsRS
+
+```{r}
+results_AoU_no_income <- compute_PsRS(domains_no_income, PsRS_weights_no_income_AoU, PsRS_scaling_no_income_AoU)
+write_excel_csv(results_AoU_no_income, '/proj/raffieldlab/users/mhysong/PEGS/Results/individual_PsRS_no_income_AoU.csv')
+plot_PsRS(results_AoU_no_income)
+```
+
+#### PEGS PsRS
+
+```{r}
+results_PEGS <- compute_PsRS(domains, PsRS_weights_PEGS, PsRS_scaling_PEGS)
+write_excel_csv(results_PEGS, '/proj/raffieldlab/users/mhysong/PEGS/Results/individual_PsRS_PEGS.csv')
+plot_PsRS(results_PEGS)
+```
+
+#### PEGS no income PsRS
+
+```{r}
+results_PEGS_no_income <- compute_PsRS(domains_no_income, PsRS_weights_no_income_PEGS, PsRS_scaling_no_income_PEGS)
+write_excel_csv(results_PEGS_no_income, '/proj/raffieldlab/users/mhysong/PEGS/Results/individual_PsRS_no_income_PEGS.csv')
+plot_PsRS(results_PEGS_no_income)
+```
+
+## Compare internally and externally trained PsRS
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(stringr)
+
+# Find PsRS columns shared by both datasets
+psrs_cols <- intersect(
+  names(results_PEGS)[str_detect(names(results_PEGS), "_PsRS$")],
+  names(results_AoU)[str_detect(names(results_AoU), "_PsRS$")]
+)
+
+# Join side-by-side
+joined_results <- results_PEGS %>%
+  select(epr_number, all_of(psrs_cols)) %>%
+  rename_with(~ paste0(.x, "_PEGS"), all_of(psrs_cols)) %>%
+  inner_join(
+    results_AoU %>%
+      select(epr_number, all_of(psrs_cols)) %>%
+      rename_with(~ paste0(.x, "_AoU"), all_of(psrs_cols)),
+    by = "epr_number"
+  )
+
+# Correlation for each PsRS column
+psrs_correlations <- map_dfr(psrs_cols, function(col) {
+  tibble(
+    PsRS = col,
+    correlation = cor(
+      joined_results[[paste0(col, "_PEGS")]],
+      joined_results[[paste0(col, "_AoU")]],
+      use = "complete.obs",
+      method = "pearson"
+    ),
+    n_complete = sum(complete.cases(
+      joined_results[[paste0(col, "_PEGS")]],
+      joined_results[[paste0(col, "_AoU")]]
+    ))
+  )
+})
+
+psrs_correlations
+```
